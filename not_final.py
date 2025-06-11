@@ -20,23 +20,26 @@ APP_DOMAIN_MAP = {
 }
 
 
-def resolve_ip_if_needed(interface: str, user_input: str) -> tuple[str, Optional[str]]:
-    if interface:
-        return interface, None  # Use interface, no IP
 
+def resolve_ip_if_needed(interface: str, user_input: str) -> str:
+    import socket
+
+    if interface:
+        return interface  # Use directly if provided
+
+    # Try to detect known application names
     for app, domain in APP_DOMAIN_MAP.items():
         if re.search(rf"\b{app}\b", user_input.lower()):
             try:
                 ip = socket.gethostbyname(domain)
                 print(f"[INFO] Resolved {app} ({domain}) to {ip}")
-                return "eth0", ip  # Use eth0 as interface, IP as source
+                return ip
             except Exception as e:
                 print(f"[WARN] Could not resolve {domain}: {e}")
-                return "eth0", None
+                return "eth0"  # Fallback
 
     print("[WARN] No app matched. Defaulting to eth0.")
-    return "eth0", None
-
+    return "eth0"
 
 
 # --- GROQ API Configuration ---
@@ -57,10 +60,8 @@ def get_vyos_config(
     interface: str = "eth0",
     use_dpi: bool = False,
     include_base_config: bool = True,
-    global_limit_duration: Optional[str] = None,
-    source_ip: Optional[str] = None
+    global_limit_duration: Optional[str] = None
 ) -> list[str]:
-
     cli_commands = []
 
     if not os.path.exists(policy_file):
@@ -202,18 +203,11 @@ def get_vyos_config(
                 app = APPLICATION_MAPPING.get(application)
                 if app:
                     cli_commands.append(
-                        f"set qos policy shaper {qos_policy_name} class {qos_class_counter} match {match_name} ip protocol {app['protocol']}"
-                    )
+                        f"set qos policy shaper {qos_policy_name} class {qos_class_counter} match {match_name} ip protocol {app['protocol']}")
                     if app["port"] != "any":
                         cli_commands.append(
-                            f"set qos policy shaper {qos_policy_name} class {qos_class_counter} match {match_name} destination port {app['port']}"
-                        )
-                    if source_ip:
-                        cli_commands.append(
-                            f"set qos policy shaper {qos_policy_name} class {qos_class_counter} match {match_name} source address {source_ip}"
-                        )
-
-            # qos_class_counter += 10
+                            f"set qos policy shaper {qos_policy_name} class {qos_class_counter} match {match_name} destination port {app['port']}")
+            qos_class_counter += 10
         elif action == "block":
             if use_dpi:
                 cli_commands.append(f"set firewall name {firewall_name} rule {firewall_rule_counter} mark {fwmark}")
@@ -298,45 +292,8 @@ def get_qos_policy(
             f.write("=" * 40 + "\n")
 
         print(f"\nCLI commands saved to: {output_file}")
-        return {"result":True}
     else:
         print("No CLI commands generated.")
-
-def write_cli_script(commands: list[str], filename: str):
-    with open(filename, "w") as f:
-        f.write("#!/bin/vbash\n")
-        f.write("source /opt/vyatta/etc/functions/script-template\n")
-        for cmd in commands:
-            f.write(cmd + "\n")
-    os.chmod(filename, 0o755)
-    print(f"[INFO] CLI script written to {filename}")
-
-import schedule
-import time
-import threading
-from subprocess import call
-
-def apply_policy():
-    print("[INFO] Applying QoS policy now...")
-    call(["bash", "./apply_qos.sh"])
-
-def rollback_policy():
-    print("[INFO] Rolling back QoS policy now...")
-    call(["bash", "./rollback_qos.sh"])
-
-def schedule_python_tasks():
-    schedule.every().day.at("19:00").do(apply_policy)
-    schedule.every().day.at("21:00").do(rollback_policy)
-
-    def run_scheduler():
-        while True:
-            schedule.run_pending()
-            time.sleep(1)
-
-    thread = threading.Thread(target=run_scheduler)
-    thread.daemon = True
-    thread.start()
-    print("[INFO] Python scheduler started. It will run tasks at 7 PM and 9 PM.")
 
 
 # --- Script Entry Point ---
@@ -354,7 +311,7 @@ if __name__ == "__main__":
     print(f"[DEBUG] use_dpi={use_dpi}, include_base_config={include_base_config}")
 
     # Infer application from complaint text using regex (basic fallback)
-    resolved_interface, resolved_ip = resolve_ip_if_needed("", user_complaint)
+    resolved_interface = resolve_ip_if_needed("", user_complaint)
 
     policy = get_qos_policy(
         user_input=user_complaint,
@@ -364,6 +321,8 @@ if __name__ == "__main__":
         global_limit_duration=global_limit
     )
 
+
+
     # policy = get_qos_policy(
     #     user_input=user_complaint,
     #     interface="eth0",
@@ -371,38 +330,9 @@ if __name__ == "__main__":
     #     include_base_config=include_base_config,
     #     global_limit_duration=global_limit
     # )
-
-    from crontab import CronTab  
-
+    print(policy)
     if policy:
         print("\nParsed Policy:")
         print(json.dumps(policy, indent=4))
-
-        # Write apply script
-        apply_script = "apply_qos.sh"
-        write_cli_script(get_vyos_config("policy.json", resolved_interface, source_ip=resolved_ip), apply_script)
-
-        # For rollback, either use empty config or generate default eth0 policy
-        rollback_script = "rollback_qos.sh"
-        rollback_commands = get_vyos_config(
-            policy_file="policy.json",
-            interface=resolved_interface,
-            include_base_config=True,
-            source_ip=resolved_ip
-        )
-        rollback_commands = [cmd.replace("prioritise", "default") for cmd in rollback_commands]  # crude revert
-        write_cli_script(rollback_commands, rollback_script)
-
-        # Schedule it (example: 7pm to 9pm)
-        schedule_python_tasks()
-
-        # Keep script alive
-        print("[INFO] Press Ctrl+C to exit.")
-        while True:
-            time.sleep(60)
-
     else:
         print("Failed to generate policy.")
-
-
-
