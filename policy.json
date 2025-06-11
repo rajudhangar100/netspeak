@@ -1,5 +1,8 @@
-{
-    "application": "Zoom",
-    "action": "prioritise",
-    "duration": "N/A"
-}
+[
+    {
+        "application": "Zoom",
+        "action": "prioritise",
+        "duration": "N/A",
+        "zone": ""
+    }
+]

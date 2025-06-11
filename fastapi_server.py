@@ -112,7 +112,7 @@ def get_cisco_config(policy_data: list) -> list:
     cli_commands += access_lists + class_maps + policy_map + interface_commands
     return cli_commands
 
-@app.post("/generate-commands")
+@app.post("/chat")
 async def generate_commands(user_input: UserInput):
     headers = {
         "Authorization": f"Bearer {GROQ_API_KEY}",

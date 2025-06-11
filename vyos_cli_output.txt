@@ -1,11 +1,20 @@
+========================================
+    Generated VyOS CLI Commands
+========================================
 configure
+delete qos policy shaper APP_QOS_POLICY
+delete firewall name APP_BLOCK_FW
+set qos policy shaper APP_QOS_POLICY description 'QoS Policy for Application Traffic'
+set qos policy shaper APP_QOS_POLICY default bandwidth '100mbit'
+set qos policy shaper APP_QOS_POLICY default burst '15k'
+set qos policy shaper APP_QOS_POLICY default queue-type fair-queue
+set firewall name APP_BLOCK_FW default-action accept
+set firewall name APP_BLOCK_FW description 'Firewall to Block Specific Applications'
 set qos policy shaper APP_QOS_POLICY class 10 bandwidth '90%'
 set qos policy shaper APP_QOS_POLICY class 10 burst '10k'
 set qos policy shaper APP_QOS_POLICY class 10 queue-type fair-queue
 set qos policy shaper APP_QOS_POLICY class 10 set-dscp 'ef'
-set qos policy shaper APP_QOS_POLICY class 10 match ZOOM_PRIORITISE_MATCH ip protocol tcp
-set qos policy shaper APP_QOS_POLICY class 10 match ZOOM_PRIORITISE_MATCH destination port 8801
-set qos policy shaper APP_QOS_POLICY class 10 match ZOOM_PRIORITISE_MATCH source address 170.114.52.2
-set interfaces ethernet eth0 traffic-policy out APP_QOS_POLICY
+set qos policy shaper APP_QOS_POLICY class 10 match ZOOM_PRIORITISE_MATCH170114522 ip source address 170.114.52.2
 commit
 save
+========================================
